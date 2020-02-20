@@ -199,6 +199,8 @@ public struct ASCollectionView<SectionID: Hashable>: UIViewControllerRepresentab
 		let supplementaryReuseID = UUID().uuidString
 		let supplementaryEmptyKind = UUID().uuidString // Used to prevent crash if supplementaries defined in layout but not provided by the section
 
+		var registered: [String] = []
+
 		var hostingControllerCache = ASFIFODictionary<ASCollectionViewItemUniqueID, ASHostingControllerProtocol>()
 
 		// MARK: Private tracking variables
@@ -244,11 +246,11 @@ public struct ASCollectionView<SectionID: Hashable>: UIViewControllerRepresentab
 
 		func registerSupplementaries(forCollectionView cv: UICollectionView)
 		{
-			supplementaryKinds().subtracting(haveRegisteredForSupplementaryOfKind).forEach
-			{ kind in
-				cv.register(ASCollectionViewSupplementaryView.self, forSupplementaryViewOfKind: kind, withReuseIdentifier: supplementaryReuseID)
-				self.haveRegisteredForSupplementaryOfKind.insert(kind) // We don't need to register this kind again now.
-			}
+			// supplementaryKinds().subtracting(haveRegisteredForSupplementaryOfKind).forEach
+			// { kind in
+			// 	cv.register(ASCollectionViewSupplementaryView.self, forSupplementaryViewOfKind: kind, withReuseIdentifier: supplementaryReuseID)
+			// 	self.haveRegisteredForSupplementaryOfKind.insert(kind) // We don't need to register this kind again now.
+			// }
 		}
 
 		func setupDataSource(forCollectionView cv: UICollectionView)
@@ -283,14 +285,36 @@ public struct ASCollectionView<SectionID: Hashable>: UIViewControllerRepresentab
 				return cell
 			}
 			dataSource?.supplementaryViewProvider = { (cv, kind, indexPath) -> UICollectionReusableView? in
+
+				let identifier = "\(self.supplementaryReuseID)-\(indexPath.section)"
+
 				guard self.supplementaryKinds().contains(kind) else
 				{
-					let emptyView = cv.dequeueReusableSupplementaryView(ofKind: self.supplementaryEmptyKind, withReuseIdentifier: self.supplementaryReuseID, for: indexPath) as? ASCollectionViewSupplementaryView
+					if !self.registered.contains(self.supplementaryEmptyKind) {
+						cv.register(ASCollectionViewSupplementaryView.self, forSupplementaryViewOfKind: self.supplementaryEmptyKind, withReuseIdentifier: self.supplementaryEmptyKind)
+						self.registered.append(self.supplementaryEmptyKind)
+					}
+					let emptyView = cv.dequeueReusableSupplementaryView(ofKind: self.supplementaryEmptyKind, withReuseIdentifier: self.supplementaryEmptyKind, for: indexPath) as? ASCollectionViewSupplementaryView
 					emptyView?.setupAsEmptyView()
 					return emptyView
 				}
-				guard let reusableView = cv.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: self.supplementaryReuseID, for: indexPath) as? ASCollectionViewSupplementaryView
-				else { return nil }
+				// print("ASCollectionView: \(identifier) \(kind)")
+				
+
+				if !self.registered.contains(identifier) {
+					cv.register(ASCollectionViewSupplementaryView.self, forSupplementaryViewOfKind: kind, withReuseIdentifier: identifier)
+					self.registered.append(identifier)
+				}
+
+				var reusableView_ = cv.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: identifier, for: indexPath) as? ASCollectionViewSupplementaryView
+				
+				if reusableView_ == nil {
+					cv.register(ASCollectionViewSupplementaryView.self, forSupplementaryViewOfKind: kind, withReuseIdentifier: identifier)
+
+					reusableView_ = cv.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: identifier, for: indexPath) as? ASCollectionViewSupplementaryView
+				} 
+				guard let reusableView = reusableView_ else { return nil }
+
 				if let supplementaryView = self.parent.sections[safe: indexPath.section]?.supplementary(ofKind: kind)
 				{
 					reusableView.setupFor(
